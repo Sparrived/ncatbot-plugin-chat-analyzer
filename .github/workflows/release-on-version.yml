@@ -1,0 +1,142 @@
+name: Release on Version Change
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "main.py"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Detect version change
+        id: version
+        run: |
+          # Create Python script to extract version from main.py
+          cat > extract_version.py << 'EOF'
+          import re
+          import sys
+
+          def extract_version_from_main(content):
+              # Match: version = "x.y.z"
+              match = re.search(r'^\s*version\s*=\s*["\']([^"\']+)["\']', content, re.MULTILINE)
+              return match.group(1) if match else ""
+
+          if __name__ == "__main__":
+              if len(sys.argv) > 1 and sys.argv[1] == "stdin":
+                  # Read from stdin
+                  content = sys.stdin.read()
+              else:
+                  # Read from main.py
+                  with open("main.py", "r") as f:
+                      content = f.read()
+              print(extract_version_from_main(content))
+          EOF
+
+          # Get the current version from main.py
+          NEW_VERSION=$(python extract_version.py)
+          echo "new_version=${NEW_VERSION}" >> $GITHUB_OUTPUT
+
+          # Try to get the previous version
+          if git rev-parse HEAD^ >/dev/null 2>&1; then
+            OLD_VERSION=$(git show HEAD^:main.py 2>/dev/null | python extract_version.py stdin || echo "")
+          else
+            OLD_VERSION=""
+          fi
+          echo "old_version=${OLD_VERSION}" >> $GITHUB_OUTPUT
+
+          # Check if version changed
+          if [ "$NEW_VERSION" = "$OLD_VERSION" ] || [ -z "$NEW_VERSION" ]; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "Version unchanged (${NEW_VERSION}), skipping release."
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Version changed from ${OLD_VERSION} to ${NEW_VERSION}"
+          fi
+
+          # Cleanup
+          rm -f extract_version.py
+
+      - name: Update README version badge
+        if: steps.version.outputs.changed == 'true'
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new_version }}"
+
+          # Replace single dash with double dash for shields.io badge format
+          # This ensures we don't double-replace already escaped dashes
+          BADGE_VERSION=$(echo "$NEW_VERSION" | sed 's/-/--/g')
+
+          # Update version badge in README.md
+          if [ -f "README.md" ]; then
+            sed -i "s/version-[0-9.a-zA-Z_-]*-orange/version-${BADGE_VERSION}-orange/g" README.md
+            
+            # Check if README was actually modified
+            if git diff --quiet README.md; then
+              echo "README.md version badge is already up to date"
+            else
+              echo "Updated README.md version badge to ${BADGE_VERSION}"
+              git config user.name "github-actions[bot]"
+              git config user.email "github-actions[bot]@users.noreply.github.com"
+              git add README.md
+              git commit -m "docs: update version badge to ${BADGE_VERSION}"
+              git push
+            fi
+          fi
+
+      - name: Prepare changelog
+        if: steps.version.outputs.changed == 'true'
+        id: changelog
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new_version }}"
+          OLD_VERSION="${{ steps.version.outputs.old_version }}"
+          TAG_NAME="v${NEW_VERSION}"
+
+          # Find the previous tag
+          if [ -n "$OLD_VERSION" ] && git rev-parse "v${OLD_VERSION}" >/dev/null 2>&1; then
+            PREV_REF="v${OLD_VERSION}"
+          else
+            PREV_REF=$(git tag --list 'v*' --sort=-v:refname | head -n 1 || echo "")
+          fi
+
+          # Generate changelog
+          if [ -n "$PREV_REF" ]; then
+            git log "$PREV_REF"..HEAD --pretty=format:'- %h %s (@%an)' --no-merges > RELEASE_NOTES.md
+          else
+            git log --pretty=format:'- %h %s (@%an)' --no-merges > RELEASE_NOTES.md
+          fi
+
+          # Add default message if no changes
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "- No code changes since last release." > RELEASE_NOTES.md
+          fi
+
+          # Add cc message
+          echo "" >> RELEASE_NOTES.md
+          echo "cc @Sparrived" >> RELEASE_NOTES.md
+
+          echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub release
+        if: steps.version.outputs.changed == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.changelog.outputs.tag_name }}
+          name: ${{ steps.changelog.outputs.tag_name }}
+          body_path: RELEASE_NOTES.md
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
