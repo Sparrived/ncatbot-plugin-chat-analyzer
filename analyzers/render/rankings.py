@@ -116,6 +116,7 @@ def create_ranking_with_avatars(
     # 固定的文字样式参数
     text_gap = 10  # 头像框和文字之间的间隙
     font_size = 32  # 昵称字体大小
+    count_font_size = 24  # 统计数字的字体大小
     text_width_reduce = 48  # 文字区域比头像框总宽度短的像素数
     
     # 加载头像框
@@ -135,10 +136,10 @@ def create_ranking_with_avatars(
     height_3rd = int(height_1st * 0.95)
     img_3rd_resized = img_3rd.resize((width_3rd, height_3rd), Image.Resampling.LANCZOS)
     
-    # 计算画布尺寸(增加底部空间用于显示昵称)
+    # 计算画布尺寸(增加底部空间用于显示昵称和统计)
     frames_total_width = width_2nd + gap + width_1st + gap + width_3rd  # 头像框总宽度
     total_width = frames_total_width  # 画布总宽度与头像框相同
-    text_height = font_size + text_gap + 10  # 文字高度 + 间隙 + 额外边距
+    text_height = font_size + count_font_size + text_gap * 2 + 10  # 昵称+统计+间隙+额外边距
     total_height = height_1st + text_height
     
     # 创建画布
@@ -173,13 +174,13 @@ def create_ranking_with_avatars(
     
     # 粘贴头像数据
     frame_data = [
-        (avatar_2nd, x_2nd, y_2nd, width_2nd, height_2nd, size_2nd, champion_infos[1].nickname),
-        (avatar_1st, x_1st, y_1st, width_1st, height_1st, size_1st, champion_infos[0].nickname),
-        (avatar_3rd, x_3rd, y_3rd, width_3rd, height_3rd, size_3rd, champion_infos[2].nickname)
+        (avatar_2nd, x_2nd, y_2nd, width_2nd, height_2nd, size_2nd, champion_infos[1]),
+        (avatar_1st, x_1st, y_1st, width_1st, height_1st, size_1st, champion_infos[0]),
+        (avatar_3rd, x_3rd, y_3rd, width_3rd, height_3rd, size_3rd, champion_infos[2])
     ]
     
     # 先粘贴头像(在底层)
-    for avatar, x, y, w, h, inner_size, nickname in frame_data:
+    for avatar, x, y, w, h, inner_size, user_info in frame_data:
         # 缩放头像以适应边框
         avatar_resized = avatar.resize((inner_size, inner_size), Image.Resampling.LANCZOS)
         
@@ -195,28 +196,33 @@ def create_ranking_with_avatars(
     canvas.paste(img_1st, (x_1st, y_1st), img_1st)
     canvas.paste(img_3rd_resized, (x_3rd, y_3rd), img_3rd_resized)
     
-    # 绘制昵称文字
+    # 绘制昵称和统计文字
     draw = ImageDraw.Draw(canvas)
     
     # 尝试加载可爱的字体,如果失败则使用默认字体
     font_paths = [
-        "C:/Windows/Fonts/STXINGKA.TTF",  # 华文行楷 - 可爱手写风格
-        "C:/Windows/Fonts/STKAITI.TTF",   # 华文楷体 - 优雅可爱
-        "C:/Windows/Fonts/simkai.ttf",    # 楷体 - 清秀可爱
-        "C:/Windows/Fonts/STFANGSO.TTF",  # 华文仿宋 - 圆润风格
+        "C:/Windows/Fonts/STKAITI.TTF",   # 华文楷体
+        "C:/Windows/Fonts/simkai.ttf",    # 楷体
         "C:/Windows/Fonts/msyh.ttc",      # 微软雅黑 - 备用
     ]
     
     font = None
+    count_font = None
     for font_path in font_paths:
         try:
-            font = ImageFont.truetype(font_path, font_size)
-            break
+            if font is None:
+                font = ImageFont.truetype(font_path, font_size)
+            if count_font is None:
+                count_font = ImageFont.truetype(font_path, count_font_size)
+            if font and count_font:
+                break
         except:
             continue
     
     if font is None:
         font = ImageFont.load_default()
+    if count_font is None:
+        count_font = ImageFont.load_default()
     
     def truncate_text(text: str, max_width: int, font) -> str:
         """
@@ -255,28 +261,33 @@ def create_ranking_with_avatars(
         
         return result
     
-    # 绘制每个昵称
-    nickname_data = [
-        (champion_infos[1].nickname, x_2nd, y_2nd + height_2nd, width_2nd),
-        (champion_infos[0].nickname, x_1st, y_1st + height_1st, width_1st),
-        (champion_infos[2].nickname, x_3rd, y_3rd + height_3rd, width_3rd)
+    # 绘制每个昵称和统计
+    user_data = [
+        (champion_infos[1], x_2nd, y_2nd + height_2nd, width_2nd),
+        (champion_infos[0], x_1st, y_1st + height_1st, width_1st),
+        (champion_infos[2], x_3rd, y_3rd + height_3rd, width_3rd)
     ]
     
-    for nickname, x, y, w in nickname_data:
-        # 文字最大宽度比头像框宽度短48像素
+    for user_info, x, y, w in user_data:
+        # --- 绘制昵称 ---
         max_text_width = w - text_width_reduce
+        truncated_nickname = truncate_text(user_info.nickname, max_text_width, font)
         
-        # 截断文字以适应宽度
-        truncated_text = truncate_text(nickname, max_text_width, font)
+        nickname_bbox = draw.textbbox((0, 0), truncated_nickname, font=font)
+        nickname_width = nickname_bbox[2] - nickname_bbox[0]
+        nickname_x = x + (w - nickname_width) // 2
+        nickname_y = y + text_gap
         
-        # 计算文字位置(在头像框下方居中)
-        text_bbox = draw.textbbox((0, 0), truncated_text, font=font)
-        text_width = text_bbox[2] - text_bbox[0]
-        text_x = x + (w - text_width) // 2  # 相对于头像框居中
-        text_y = y + text_gap
+        draw.text((nickname_x, nickname_y), truncated_nickname, font=font, fill=(0, 0, 0, 255))
         
-        # 绘制文字(纯黑色)
-        draw.text((text_x, text_y), truncated_text, font=font, fill=(0, 0, 0, 255))
+        # --- 绘制统计 ---
+        count_text = user_info.count
+        count_bbox = draw.textbbox((0, 0), count_text, font=count_font)
+        count_width = count_bbox[2] - count_bbox[0]
+        count_x = x + (w - count_width) // 2
+        count_y = nickname_y + font_size  # 在昵称下方
+        
+        draw.text((count_x, count_y), count_text, font=count_font, fill=(80, 80, 80, 255))
     
     return canvas
 

@@ -1,10 +1,12 @@
 from typing import Dict, List
 from PIL import Image
-import pillowmd
-import asyncio
 from pathlib import Path
+from datetime import datetime
+
 from ncatbot.utils import get_log
 
+import pillowmd
+import asyncio
 
 try:
     from .rankings import save_ranking_with_avatars, RenderUserInfo
@@ -15,7 +17,7 @@ LOG = get_log("ChatAnalyzer")
 
 
 async def render_analysis_result(
-    results: Dict[str, tuple[RenderUserInfo]],
+    results: Dict[str, list[RenderUserInfo] | Path],
     title: str = "今日群聊信息总结",
     resources_path: Path = Path("data/ChatAnalyzer/resources")
 ) -> List[Image.Image]:
@@ -38,30 +40,36 @@ async def render_analysis_result(
     pillowmd.Setting.QUICK_IMAGE_PATH = temp_dir
     # 构建 Markdown 文本
     markdown_parts = []
-    markdown_parts.append(f"# {title}\n")
+    markdown_parts.append(f"# {title}")
+    
+    # 获取当前时间，精确到分钟
+    current_time = datetime.now().strftime("%Y年%m月%d日 %H:%M")
+    markdown_parts.append(f"> 现在是 {current_time} ，来看看各位的发言情况喵！")
     
     # 遍历每个分析器的结果
-    for analyzer_name, result_tuple in results.items():
+    for analyzer_name, result in results.items():
         # 添加分析器名称作为二级标题
         markdown_parts.append(f"\n## {analyzer_name}\n")
-
-        if result_tuple and len(result_tuple) > 0:
+        img_path: Path
+        if isinstance(result, list):
             # 获取前三名,不足的用占位符填充
-            top_users = list(result_tuple[:3])
+            top_users = result
             while len(top_users) < 3:
                 rank = len(top_users) + 1
                 top_users.append(RenderUserInfo.create_placeholder(rank))
             
-            avatar_img_path = save_ranking_with_avatars(
+            img_path = save_ranking_with_avatars(
                 champion_infos=(top_users[0], top_users[1], top_users[2]),
                 resources_path=resources_path
             )
-            temp_pics.append(avatar_img_path)
-            
-            # 在 Markdown 中添加图片引用
-            markdown_parts.append(f"!sgm[{avatar_img_path.name}]")
+        elif isinstance(result, Path):
+            img_path = result
         else:
-            markdown_parts.append("\n*暂无数据*\n")
+            markdown_parts.append(result)
+            continue
+            # 在 Markdown 中添加图片引用
+        temp_pics.append(img_path)
+        markdown_parts.append(f"!sgm[{img_path.name}|0.8]")
     # 组合完整的 Markdown 文本
     markdown_text = "\n".join(markdown_parts)
     

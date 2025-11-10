@@ -48,7 +48,7 @@ class BaseAnalyzer(ABC):
     _name : str
     _counter : Counter
     _unit: str = "个"
-    _custom_image_getter: Optional[Callable[[Path], Path]] = None
+    _custom_image_getter: Optional[Callable[[Path], Path] | Callable[[],str]] = None
 
     def __init__(self, group_id: str):
         """初始化分析器"""
@@ -100,6 +100,6 @@ class BaseAnalyzer(ABC):
         return self._custom_image_getter is not None
     
     @property
-    def custom_image_getter(self) -> Optional[Callable[[Path], Path]]:
+    def custom_image_getter(self) -> Optional[Callable[[Path], Path] | Callable[[], str]]:
         """获取自定义图片生成函数"""
         return self._custom_image_getter

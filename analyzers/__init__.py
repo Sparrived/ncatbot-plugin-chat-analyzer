@@ -4,7 +4,8 @@ from .analysis import ChatAnalysisEngine
 # 导入所有分析器以触发注册
 from . import sender
 from . import imager
-from . import word_cloud_analyzer
+from . import hourly_analyzer
+from . import word
 
 __all__ = [
     "BaseAnalyzer",

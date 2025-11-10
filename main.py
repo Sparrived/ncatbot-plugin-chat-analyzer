@@ -1,20 +1,16 @@
 from ncatbot.plugin_system import NcatBotPlugin, admin_group_filter, command_registry, option, param
 from ncatbot.utils import get_log
-from ncatbot.core import BaseMessageEvent, GroupMessageEvent, PrivateMessageEvent
+from ncatbot.core import GroupMessageEvent
 from ncatbot.plugin_system.builtin_plugin.unified_registry.command_system.registry.help_system import HelpGenerator
 
 from .utils import require_subscription
 from .analyzers import ChatAnalysisEngine
-from .render.main_render import render_analysis_result
 
-import time
 from datetime import datetime
-from io import BytesIO
-import base64
 
 class ChatAnalyzer(NcatBotPlugin):
     name = "ChatAnalyzer"
-    version = "1.0.0"
+    version = "1.0.1"
     description = "一个在某一时段内分析群聊活跃度的插件。"
     log = get_log(name)
 
@@ -50,8 +46,7 @@ class ChatAnalyzer(NcatBotPlugin):
     @admin_group_filter
     @ca_group.command("analyze", description="分析群聊数据并生成图片报告")
     @param("time", default="22:00", help="分析时间点(格式: HH:MM)", required=False)
-    @param("show_avatars", default=True, help="是否显示前三名头像", required=False)
-    async def cmd_analyze(self, event: GroupMessageEvent, time: str = "22:00", show_avatars: bool = True):
+    async def cmd_analyze(self, event: GroupMessageEvent, time: str = "22:00"):
         """分析群聊数据并生成图片报告"""
         try:
             await event.reply("开始分析群聊数据喵~请稍等...")
@@ -66,26 +61,10 @@ class ChatAnalyzer(NcatBotPlugin):
             self.log.info(f"获取到 {len(chat_histories)} 条聊天记录")
             
             # 使用分析引擎进行分析
-            engine = ChatAnalysisEngine()
-            results = engine.analyze(chat_histories)
-            
-            self.log.info(f"分析结果: {results}")
-            
-            # 渲染为图片
-            result_image = await render_analysis_result(
-                results=results,
-                title=f"群聊数据分析报告",
-                max_show_count=10,
-                show_avatars=show_avatars
-            )
-            
-            # 将图片转换为 base64
-            img_buffer = BytesIO()
-            result_image.save(img_buffer, format='PNG')
-            img_base64 = base64.b64encode(img_buffer.getvalue()).decode()
-            
+            engine = ChatAnalysisEngine(self.workspace / "resources", event.group_id)
+            img_b64 = await engine.analyze(chat_histories)
             # 发送图片
-            await event.reply(f"[CQ:image,file=base64://{img_base64}]")
+            await self.api.post_group_msg(event.group_id, image=f"base64://{img_b64}")
             
         except Exception as e:
             self.log.error(f"分析失败: {e}", exc_info=True)

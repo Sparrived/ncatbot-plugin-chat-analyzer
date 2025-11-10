@@ -1,10 +1,14 @@
 from ncatbot.core import GroupMessageEvent
-from ncatbot.utils import status
-from typing import List, Dict, Any
+from ncatbot.utils import get_log
+from typing import List, Dict
 from pathlib import Path
+import base64
+from io import BytesIO
 
 from .base_analyzer import BaseAnalyzer, get_all_analyzers
+from .render import RenderUserInfo, render_analysis_result
 
+LOG = get_log("ChatAnalyzerEngine")
 
 class ChatAnalysisEngine:
     """聊天分析引擎 - 协调多个分析器,一次遍历完成所有统计"""
@@ -23,13 +27,16 @@ class ChatAnalysisEngine:
         self.analyzers.append(analyzer)
         return self
     
-    def analyze(self, events: List[GroupMessageEvent]) -> Dict[str, Any]:
+    async def analyze(self, events: List[GroupMessageEvent], retry: int = 0) -> str:
         """
         分析聊天记录,一次遍历完成所有统计
         
         :param events: GroupMessageEvent 对象列表
-        :return: 包含所有分析结果的字典,key为分析器名称,value为分析结果
+        :return: base64 字符串
         """
+        if retry > 3:
+            LOG.error("分析重试次数过多，终止分析")
+            raise RuntimeError("分析重试次数过多，终止分析")
         # 重置所有分析器
         for analyzer in self.analyzers:
             analyzer.reset()
@@ -40,14 +47,24 @@ class ChatAnalysisEngine:
                 analyzer.process_event(event)
         
         # 收集所有分析结果
-        results = {}
+        results: Dict[str, List[RenderUserInfo] | Path] = {}
         for analyzer in self.analyzers:
             if analyzer.is_custom:
                 results[analyzer.name] = analyzer.custom_image_getter(self._resources_path)  # type: ignore
             else:
-                results[analyzer.name] = analyzer.get_result()
+                results[analyzer.name] = await analyzer.get_result()
         
-        return results
+        images = await render_analysis_result(results, resources_path=self._resources_path)
+
+        if not images:
+            LOG.warning("分析结果图片生成失败，重试中...")
+            return await self.analyze(events, retry=retry + 1)
+        
+        buffered = BytesIO()
+        images[0].save(buffered, format="PNG")
+        img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+
+        return img_str
     
     def clear_analyzers(self):
         """清空所有注册的分析器"""
