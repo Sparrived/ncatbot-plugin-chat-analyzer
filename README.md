@@ -6,7 +6,7 @@
 
 [![License](https://img.shields.io/badge/License-MIT_License-green.svg)](https://github.com/Sparrived/ncatbot-plugin-chat-analyzer/blob/master/LICENSE)
 [![ncatbot version](https://img.shields.io/badge/ncatbot->=4.3.0-blue.svg)](https://github.com/liyihao1110/ncatbot)
-[![Version](https://img.shields.io/badge/version-1.0.3-orange.svg)](https://github.com/Sparrived/ncatbot-plugin-chat-analyzer/releases)
+[![Version](https://img.shields.io/badge/version-1.0.4-orange.svg)](https://github.com/Sparrived/ncatbot-plugin-chat-analyzer/releases)
 
 
 </div>
@@ -22,45 +22,50 @@
 - 😂 **表情包王** - 分析谁是群里的表情包大师
 - ☁️ **词云生成** - 自动生成高频词汇词云图，直观展示聊天热词
 - 📈 **词性分析** - 统计群聊中不同词性的使用频率（名词、动词、形容词等）
-- ⏰ **小时活跃度** - 按时间段展示24小时聊天活跃度分布
+- ⏰ **小时活跃度** - 按时间段展示聊天活跃度分布
 - 🎨 **蜡笔风格** - 独特的手绘蜡笔风格图表，让数据更生动
-- 📅 **自动推送** - 支持定时自动生成并推送每日/每周群聊总结
+- 📅 **自动推送** - 支持定时自动生成并推送群聊总结，可配置多个时间点
 
 ## ⚙️ 配置项
 
 配置文件位于 `data/ChatAnalyzer/ChatAnalyzer.yaml`
 
-| 配置键               | 类型        | 默认值          | 说明                                                     |
-| -------------------- | ----------- | --------------- | -------------------------------------------------------- |
-| `subscribed_groups`  | `List[str]` | `['123456789']` | 插件生效的群号白名单。只有在此列表中的群组才会处理命令。 |
-| `auto_push.enabled`  | `bool`      | `false`         | 是否启用自动推送功能。                                   |
-| `auto_push.time`     | `str`       | `"23:59"`       | 自动推送时间，格式为 `HH:MM`。                           |
-| `auto_push.interval` | `str`       | `"daily"`       | 推送间隔，可选值：`daily`（每日）、`weekly`（每周）。    |
+| 配置键                  | 类型        | 默认值          | 说明                                                     |
+| ----------------------- | ----------- | --------------- | -------------------------------------------------------- |
+| `subscribed_groups`     | `List[str]` | `['123456789']` | 插件生效的群号白名单。只有在此列表中的群组才会处理命令。 |
+| `analysis_time`         | `List[str]` | `['22:00']`     | 自动分析时间点列表，格式为 `HH:MM`，支持多个时间点。     |
+| `analysis_duration`     | `int`       | `1440`          | 分析时长（分钟），默认 1440 分钟（24 小时）。            |
+| `minimum_message_count` | `int`       | `10`            | 进行分析所需的最小消息数量。                             |
 
 **配置示例:**
 ```yaml
 subscribed_groups:
-- '123456789'
-- '987654321'
-auto_push:
-  enabled: true
-  time: "23:59"
-  interval: "daily"
+  - '123456789'
+  - '987654321'
+analysis_time:
+  - "22:00"
+  - "23:59"
+analysis_duration: 1440
+minimum_message_count: 10
 ```
 
-> **提示:** 配置文件可通过 NcatBot 的统一配置机制进行覆盖。建议使用 `/ca subscribe` 命令动态添加群组，避免手动修改配置后需要重启机器人。
+> **提示:** 
+> - 配置文件可通过 NcatBot 的统一配置机制进行覆盖
+> - 建议使用 `/ca subscribe` 命令动态添加群组，避免手动修改配置后需要重启机器人
+> - `analysis_time` 支持配置多个时间点，插件会在每个时间点自动发送分析报告
+> - `analysis_duration` 为分析的时长，从指定时间点往前推算
 
 ## 🚀 快速开始
 
 ### 依赖要求
 
 - Python >= 3.8
-- NcatBot >= 4.2.9
+- NcatBot >= 4.3.0
 - 第三方依赖：
-  - `jieba` - 中文分词
-  - `wordcloud` - 词云生成
-  - `pillow` - 图像处理
   - `pillowmd` - Markdown 渲染
+  - `aiohttp` - 异步 HTTP 请求
+  - `wordcloud` - 词云生成
+  - `jieba` - 中文分词
 
 ### 使用 Git
 
@@ -70,6 +75,7 @@ cd ncatbot-plugin-chat-analyzer
 pip install -r plugins/chat_analyzer/requirements.txt
 cp -r plugins/chat_analyzer /path/to/your/ncatbot/plugins/
 ```
+**⚠️ 重要：将 `resources.zip` 解压到 `data/ChatAnalyzer/` 目录下**（解压后应该有 `data/ChatAnalyzer/resources/` 文件夹）
 
 > 请将 `/path/to/your/ncatbot/plugins/` 替换为机器人实际的插件目录。
 
@@ -77,22 +83,23 @@ cp -r plugins/chat_analyzer /path/to/your/ncatbot/plugins/
 
 1. 将本插件目录置于 `plugins/chat_analyzer`。
 2. 安装依赖：`pip install -r plugins/chat_analyzer/requirements.txt`
-3. 根据实际需要调整 `subscribed_groups` 等配置项（建议在群内使用指令调整，手动调整config需要重启机器人）。
-4. 重启 NcatBot，插件将自动加载。
+3. **⚠️ 重要：将 `resources.zip` 解压到 `data/ChatAnalyzer/` 目录下**（解压后应该有 `data/ChatAnalyzer/resources/` 文件夹）
+4. 根据实际需要调整 `subscribed_groups` 等配置项（建议在群内使用指令调整，手动调整config需要重启机器人）。
+5. 重启 NcatBot，插件将自动加载。
 
 ### 插件指令
 
 > **注意事项:**
 > - 所有指令仅限 NcatBot 管理员用户使用（`admin_group_filter` 限制）
 > - 分析功能需要先订阅群组才能生效
-> - 首次使用建议订阅后等待一段时间收集聊天数据
+> - 插件会自动从 OneBot11 API 获取历史聊天记录，无需手动收集数据
 
-| 指令                  | 参数                                     | 说明                                                       | 示例                              |
-| --------------------- | ---------------------------------------- | ---------------------------------------------------------- | --------------------------------- |
-| `/ca analyze [hours]` | `hours`：可选，统计时长（小时），默认 24 | 分析指定时间段内的群聊数据，生成包含多维度统计的可视化报告 | `/ca analyze`<br>`/ca analyze 48` |
-| `/ca subscribe`       | 无                                       | 订阅当前群的聊天分析功能，开始收集聊天数据                 | `/ca subscribe`                   |
-| `/ca unsubscribe`     | 无                                       | 取消当前群的订阅，停止收集聊天数据                         | `/ca unsubscribe`                 |
-| `/ca help [command]`  | `command`：可选，指定命令名              | 显示所有可用指令或指定命令的详细说明                       | `/ca help`<br>`/ca help analyze`  |
+| 指令                            | 参数                                                                                           | 说明                                                       | 示例                                                              |
+| ------------------------------- | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------- |
+| `/ca analyze [time] [duration]` | `time`：可选，分析时间点(HH:MM)，默认当前时间<br>`duration`：可选，分析时长（分钟），默认 1440 | 分析指定时间段内的群聊数据，生成包含多维度统计的可视化报告 | `/ca analyze`<br>`/ca analyze 22:00 1440`<br>`/ca analyze "" 720` |
+| `/ca subscribe`                 | 无                                                                                             | 订阅当前群的聊天分析功能，加入自动推送白名单               | `/ca subscribe`                                                   |
+| `/ca unsubscribe`               | 无                                                                                             | 取消当前群的订阅，移出自动推送白名单                       | `/ca unsubscribe`                                                 |
+| `/ca help [command]`            | `command`：可选，指定命令名                                                                    | 显示所有可用指令或指定命令的详细说明                       | `/ca help`<br>`/ca help analyze`                                  |
 
 ## 📊 分析维度
 
@@ -129,18 +136,23 @@ cp -r plugins/chat_analyzer /path/to/your/ncatbot/plugins/
 - 插件在执行命令前，会先检查群组是否在 `subscribed_groups` 配置列表中
 - 对于未订阅的群组，插件会跳过处理，并提示先使用 `/ca subscribe` 订阅
 - 使用 `/ca subscribe` 可快速将当前群添加到白名单，无需重启机器人
+- 订阅的群组会在配置的 `analysis_time` 时间点自动接收分析报告
 
 ### 数据收集流程
-- 通过 ncatbot 的历史聊天记录接口获取24小时内的所有聊天记录，并通过analyzer进行分析
+- 通过 ncatbot API 的 `get_group_msg_history` 接口实时获取历史聊天记录
+- 支持自定义时间范围，从指定时间点往前推算指定时长的聊天记录
+- 采用智能递归获取策略，自动处理分页，确保获取到完整的时间范围内的所有消息
+- 使用二分查找算法快速定位目标时间范围，提高查询效率
 
 ### 分析流程
-1. 接收到 `/ca analyze` 命令
-2. 从数据库中读取指定时间段的聊天记录
-3. 初始化所有注册的分析器（话痨、图片、词云等）
-4. 一次遍历完成所有统计（高效处理）
-5. 生成可视化图表
-6. 使用 Markdown 渲染生成最终报告
-7. 发送到群聊
+1. 接收到 `/ca analyze` 命令或触发自动推送任务
+2. 通过 ncatbot API 获取指定时间段的聊天记录
+3. 验证消息数量是否满足最小要求（`minimum_message_count`）
+4. 初始化所有注册的分析器（话痨、图片、词云、词性、时间等）
+5. 一次遍历完成所有统计（高效处理）
+6. 生成可视化图表（词云、词性分布、小时活跃度）
+7. 使用 Markdown 渲染生成最终报告
+8. 转换为 Base64 图片并发送到群聊
 
 ### 性能优化
 - **LRU 缓存**: jieba 分词结果使用 LRU 缓存，相同文本只处理一次
@@ -168,15 +180,20 @@ grep "ChatAnalyzer" logs/bot.log.2025_11_10
 - 确认发送指令的用户是否在 NcatBot 的管理员列表中
 - 查看日志确认是否有错误信息
 
+**Q: 提示"未能获取到聊天记录"？**
+- 检查机器人是否有获取群聊天记录的权限
+- 尝试减少分析时长或调整时间点
+- 查看日志确认 API 调用是否成功
+
+**Q: 提示"聊天记录数量不足"？**
+- 默认需要至少 10 条消息才能进行分析
+- 可以通过修改 `minimum_message_count` 配置项调整阈值
+- 尝试增加分析时长以获取更多消息
+
 **Q: 词云生成失败？**
 - 确保已安装 `wordcloud` 库：`pip install wordcloud`
 - 检查系统是否有中文字体（Windows: simkai.ttf 或 msyh.ttc）
-- 确认有足够的聊天数据（至少需要一些包含文字的消息）
-
-**Q: 分析结果为空？**
-- 确认指定的时间段内有聊天记录
-- 检查数据库文件是否正常（`data/ChatAnalyzer/chat_records.db`）
-- 尝试增加分析时长（如 `/ca analyze 48`）
+- 确认有足够的文字消息（纯图片/表情包无法生成词云）
 
 **Q: 图片渲染失败？**
 - 确保已安装所有依赖：`pip install -r requirements.txt`
@@ -184,13 +201,14 @@ grep "ChatAnalyzer" logs/bot.log.2025_11_10
 - 查看日志中的详细错误信息
 
 **Q: 自动推送不工作？**
-- 检查 `auto_push.enabled` 配置是否为 `true`
-- 确认 `auto_push.time` 格式正确（HH:MM）
-- 检查日志确认定时任务是否正常启动
+- 检查 `analysis_time` 配置是否正确（格式：HH:MM）
+- 确认目标群组是否在 `subscribed_groups` 列表中
+- 查看日志确认定时任务是否正常注册和触发
+- 注意：修改配置后需要重启机器人
 
 **Q: 小时活跃度时间显示不对？**
-- 小时活跃度图会从当前统计开始时间展示连续24小时
-- 时间标签每2小时显示一次（0, 2, 4, 6, ...）
+- 小时活跃度图会从指定时间点往前推算显示连续时间段
+- 时间标签每2小时显示一次
 - 色块按时间顺序从左到右排列，颜色深浅表示活跃程度
 
 ## 🤝 贡献

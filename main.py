@@ -8,9 +8,12 @@ from .analyzers import ChatAnalysisEngine, RenderInfo
 
 from datetime import datetime
 
+import asyncio
+
 class ChatAnalyzer(NcatBotPlugin):
     name = "ChatAnalyzer"
-    version = "1.0.3"
+    version = "1.0.4"
+    author = "Sparrived"
     description = "一个在某一时段内分析群聊活跃度的插件。"
     log = get_log(name)
 
@@ -41,10 +44,21 @@ class ChatAnalyzer(NcatBotPlugin):
             list
         )
 
+    def init_scheduler(self):
+        """初始化定时任务"""
+        for time in self.config["analysis_time"]:
+            self.add_scheduled_task(
+                job_func=self._auto_send_analysis,
+                name="auto_send_analysis",
+                interval=time,
+                kwargs={"time": time}
+            )
+            self.log.info(f"已注册自动发送分析任务， {time} 触发。")
 
     # ======== 初始化插件 ========
     async def on_load(self):
         self.init_config()
+        self.init_scheduler()
 
     # ======== 注册指令 ========
     ca_group = command_registry.group("ca", description="聊天分析指令")
@@ -90,7 +104,7 @@ class ChatAnalyzer(NcatBotPlugin):
         if len(chat_histories) < self.config["minimum_message_count"]:
             raise ValueError("聊天记录数量不足，无法进行分析喵~")
         
-        self.log.info(f"获取到 {len(chat_histories)} 条聊天记录")
+        self.log.info(f"从群 {group_id} 获取到 {len(chat_histories)} 条聊天记录")
         group_info = await self.api.get_group_info(group_id)
         # 使用分析引擎进行分析
         render_info = RenderInfo(
@@ -102,6 +116,7 @@ class ChatAnalyzer(NcatBotPlugin):
         engine = ChatAnalysisEngine(self.workspace / "resources", group_id, render_info)
         img_b64 = await engine.analyze(chat_histories)
         # 发送图片
+        await self.api.post_group_msg(group_id, "大人们，这是你们今天的聊天分析报告，请注意查收喵~")
         await self.api.post_group_msg(group_id, image=f"base64://{img_b64}")
 
     async def _get_chat_history(self, group_id: str, time: str, duration:int, count: int = 101):
@@ -175,6 +190,24 @@ class ChatAnalyzer(NcatBotPlugin):
                 count=count + 101
             )
     
+    async def _auto_send_analysis(self, time: str):
+        """自动发送分析报告的任务"""
+        subscribed_groups = self.config["subscribed_groups"]
+        self.log.info(f"触发时间点：{time}，即将向 {'、'.join(subscribed_groups)} 发送聊天分析报告")
+        async def task(group_id: str):
+            try:
+                await self._post_analyze_img(group_id, time, self.config["analysis_duration"])
+                self.log.info(f"成功向 {group_id} 发送聊天分析报告")
+            except Exception as e:
+                self.log.error(f"向 {group_id} 发送聊天分析报告失败：{e}")
+                await self.api.post_group_msg(group_id, f"这个时间应该给你们总结近段时间的聊天记录的，结果因为 {e} 没能成功喵……")
+        tasks = []
+        for group_id in subscribed_groups:
+            tasks.append(asyncio.create_task(task(group_id)))
+        await asyncio.gather(*tasks)
+
+
+
     # ======== 订阅功能 ========
     @admin_group_filter
     @ca_group.command("subscribe", description="订阅聊天分析功能")
