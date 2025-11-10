@@ -262,7 +262,7 @@ class YourAnalyzer(BaseAnalyzer):
 - [NcatBot](https://github.com/liyihao1110/ncatbot) - 提供稳定易用的 OneBot11 Python SDK
 - [jieba](https://github.com/fxsjy/jieba) - 优秀的中文分词库
 - [wordcloud](https://github.com/amueller/word_cloud) - 强大的词云生成工具
-- [pillowmd](https://github.com/FlechazoPh/PillowMd) - Markdown 图像渲染库
+- [pillowmd](https://github.com/Monody-S/CustomMarkdownImage) - Markdown 图像渲染库
 - 社区测试者与维护者 - 提交 Issue、Pull Request 以及改进建议
 
 ## 📄 许可证
