@@ -4,7 +4,7 @@ from ncatbot.core import GroupMessageEvent
 from ncatbot.plugin_system.builtin_plugin.unified_registry.command_system.registry.help_system import HelpGenerator
 
 from .utils import require_subscription
-from .analyzers import ChatAnalysisEngine
+from .analyzers import ChatAnalysisEngine, RenderInfo
 
 from datetime import datetime
 
@@ -45,23 +45,38 @@ class ChatAnalyzer(NcatBotPlugin):
     
     @admin_group_filter
     @ca_group.command("analyze", description="分析群聊数据并生成图片报告")
-    @param("time", default="22:00", help="分析时间点(格式: HH:MM)", required=False)
-    async def cmd_analyze(self, event: GroupMessageEvent, time: str = "22:00"):
+    @param("time", default="", help="分析时间点(格式: HH:MM)", required=False)
+    @param("duration", default=1440, help="分析时长(分钟)", required=False)
+    async def cmd_analyze(self, event: GroupMessageEvent, time: str="", duration: int=1440):
         """分析群聊数据并生成图片报告"""
+        if not time:
+            time = datetime.now().strftime("%H:%M")
+        # 校验时间格式
+        try:
+            datetime.strptime(time, "%H:%M")
+        except ValueError:
+            await event.reply("时间格式错误喵~请使用 HH:MM 格式")
+            return
         try:
             await event.reply("开始分析群聊数据喵~请稍等...")
             
             # 获取聊天记录
-            chat_histories = await self._get_chat_history(str(event.group_id), time)
+            chat_histories = await self._get_chat_history(str(event.group_id), time, duration)
             
             if not chat_histories:
                 await event.reply("未能获取到聊天记录喵~")
                 return
             
             self.log.info(f"获取到 {len(chat_histories)} 条聊天记录")
-            
+            group_info = await self.api.get_group_info(event.group_id)
             # 使用分析引擎进行分析
-            engine = ChatAnalysisEngine(self.workspace / "resources", event.group_id)
+            render_info = RenderInfo(
+                current_time=datetime.now(),
+                analysis_duration=duration,
+                group_name_and_id=f"{group_info.group_name}({event.group_id})",
+                plugin_version=self.version
+            )
+            engine = ChatAnalysisEngine(self.workspace / "resources", event.group_id, render_info)
             img_b64 = await engine.analyze(chat_histories)
             # 发送图片
             await self.api.post_group_msg(event.group_id, image=f"base64://{img_b64}")
@@ -74,43 +89,47 @@ class ChatAnalyzer(NcatBotPlugin):
     @ca_group.command("test", description="测试指令")
     async def cmd_test(self, event: GroupMessageEvent):
         await event.reply("测试指令响应成功喵~")
-        chat_histories = await self._get_chat_history(str(event.group_id), "22:00")
+        chat_histories = await self._get_chat_history(str(event.group_id), "22:00", self.config["analysis_duration"])
         earliest_chat = chat_histories[0]
         if earliest_chat:
             await self.api.post_group_msg(event.group_id, f"获取到了{len(chat_histories)}条聊天记录喵~最早一条聊天记录是: {earliest_chat.raw_message}，时间是{datetime.fromtimestamp(earliest_chat.time).strftime('%Y-%m-%d %H:%M:%S')}")
 
     # ======== 私有方法 ========
-    async def _get_chat_history(self, group_id: str, time: str, count: int = 101):
+    async def _get_chat_history(self, group_id: str, time: str, duration:int, count: int = 101):
         """
         获取指定时间范围内的聊天记录
+
         :param group_id: 群组ID
         :param time: 目标时间点(格式: "HH:MM")
+        :param duration: 分析时长(分钟)
         :param count: 每次获取的记录数量
         :param index: 已处理的记录数量(用于避免重复查询)
         :return: 时间范围内的聊天记录列表
         """
+        # 校验时间格式
+        try:
+            datetime.strptime(time, "%H:%M")
+        except ValueError:
+            raise ValueError("时间格式错误")
+        
         # 获取聊天记录
         chat_histories = await self.api.get_group_msg_history(
             group_id=group_id,
             count=count
         )
-        
         # API返回的第一个元素是最早的聊天记录
         earliest_chat_history = chat_histories[0]
-        
         # 将时间字符串(如"22:00")转换为当天该时间点的timestamp
         hour, minute = map(int, time.split(':'))
         today = datetime.now().date()
         target_time = datetime.combine(today, datetime.min.time().replace(hour=hour, minute=minute))
         target_timestamp = int(target_time.timestamp())
         earliest_timestamp = earliest_chat_history.time
-        start_timestamp = target_timestamp - self.config["analysis_duration"] * 60
-        
+        start_timestamp = target_timestamp - duration * 60
         # 判断最早的记录是否在我们需要的时间范围之前(或等于)
         if earliest_timestamp <= start_timestamp:
             # 已经获取到足够早的记录,进行二分查找
             # chat_histories 按时间升序排列(最早在前,最新在后)
-            
             # 找到第一个 >= start_timestamp 的索引
             left, right = 0, len(chat_histories) - 1
             start_idx = len(chat_histories)  # 默认找不到
@@ -121,7 +140,6 @@ class ChatAnalyzer(NcatBotPlugin):
                     right = mid - 1  # 继续向左找更早满足条件的
                 else:
                     left = mid + 1
-            
             # 找到最后一个 <= target_timestamp 的索引
             left, right = 0, len(chat_histories) - 1
             end_idx = -1  # 默认找不到
@@ -132,7 +150,6 @@ class ChatAnalyzer(NcatBotPlugin):
                     left = mid + 1  # 继续向右找更晚满足条件的
                 else:
                     right = mid - 1
-            
             # 获取时间范围内的聊天记录
             if start_idx < len(chat_histories) and end_idx >= 0 and start_idx <= end_idx:
                 filtered_histories = chat_histories[start_idx:end_idx + 1]
@@ -142,9 +159,12 @@ class ChatAnalyzer(NcatBotPlugin):
         else:
             # 需要获取更早的聊天记录
             # 递归调用,增加count以获取更多历史记录
-            # index记录当前已获取的记录数,下次递归时这部分数据无需重新查找
-            new_index = len(chat_histories)
-            return await self._get_chat_history(group_id=group_id, time=time, count=count + 101)
+            return await self._get_chat_history(
+                group_id=group_id, 
+                time=time, 
+                duration=duration, 
+                count=count + 101
+            )
     
     # ======== 订阅功能 ========
     @admin_group_filter

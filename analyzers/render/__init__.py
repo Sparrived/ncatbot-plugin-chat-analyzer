@@ -4,7 +4,8 @@
 """
 
 from .main_render import (
-    render_analysis_result
+    render_analysis_result,
+    RenderInfo
 )
 from .rankings import (
     create_ranking_with_avatars,
@@ -17,4 +18,5 @@ __all__ = [
     'render_analysis_result',
     'create_ranking_with_avatars',
     'save_ranking_with_avatars',
+    'RenderInfo'
 ]

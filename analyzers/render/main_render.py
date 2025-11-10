@@ -1,7 +1,8 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 from PIL import Image
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
+from dataclasses import dataclass, field
 
 from ncatbot.utils import get_log
 
@@ -15,10 +16,29 @@ except ImportError:
 
 LOG = get_log("ChatAnalyzer")
 
+@dataclass
+class RenderInfo:
+    current_time: datetime
+    analysis_duration: int
+    group_name_and_id: str
+    plugin_version: str
+    _start_time: Optional[datetime] = field(default=None)
+    markdown_texts: List[str] = field(default_factory=list)
+
+    def __post_init__(self):
+        if self._start_time is None:
+            self._start_time = self.current_time - timedelta(minutes=self.analysis_duration)
+        self.markdown_texts.append(f"> 现在是 {self.current_time} ，来看看各位的发言情况喵！\n")
+        self.markdown_texts.append(f"统计时间段：{self._start_time.strftime('%Y年%m月%d日 %H:%M')} ~ {self.current_time.strftime('%Y年%m月%d日 %H:%M')}\n")
+        self.markdown_texts.append(f"所在群：{self.group_name_and_id}\n")
+        self.markdown_texts.append(f"插件版本：{self.plugin_version}\n")
+        self.markdown_texts.append("\n<color=#800080>今天也要开心喵~<color=None>\n")
+
 
 async def render_analysis_result(
+    render_info: RenderInfo,
     results: Dict[str, list[RenderUserInfo] | Path],
-    title: str = "今日群聊信息总结",
+    title: str = "群聊信息分析表",
     resources_path: Path = Path("data/ChatAnalyzer/resources")
 ) -> List[Image.Image]:
     """
@@ -41,11 +61,7 @@ async def render_analysis_result(
     # 构建 Markdown 文本
     markdown_parts = []
     markdown_parts.append(f"# {title}")
-    
-    # 获取当前时间，精确到分钟
-    current_time = datetime.now().strftime("%Y年%m月%d日 %H:%M")
-    markdown_parts.append(f"> 现在是 {current_time} ，来看看各位的发言情况喵！")
-    
+    markdown_parts.extend(render_info.markdown_texts)
     # 遍历每个分析器的结果
     for analyzer_name, result in results.items():
         # 添加分析器名称作为二级标题
@@ -78,8 +94,7 @@ async def render_analysis_result(
     result = await pillowmd.MdToImage(
         text=markdown_text,
         style=style,
-        page=3,
-        autoPage=True,
+        page=2,
         sgm=True,
         sgexter=True
     )
@@ -117,10 +132,10 @@ if __name__ == "__main__":
         }
         
         # 带头像排行的渲染(每个分析器下方显示头像) - 保存为 PNG
-        print("\n[测试] 带头像排行的渲染(每个分析器独立显示头像)...")
-        result_images_with_avatars = await render_analysis_result(
-            results=test_results
-        )
+        # print("\n[测试] 带头像排行的渲染(每个分析器独立显示头像)...")
+        # result_images_with_avatars = await render_analysis_result(
+        #     results=test_results
+        # )
         
         # 保存为 GIF 格式
         # output_path_avatars = "d:/Code/SiriusBot-Neko/test_analysis_result_with_avatars.gif"
@@ -134,7 +149,7 @@ if __name__ == "__main__":
         #     optimize=False
         # )
         output_path_avatars = "d:/Code/SiriusBot-Neko/test_analysis_result_with_avatars.png"
-        result_images_with_avatars[0].save(output_path_avatars)
+        # result_images_with_avatars[0].save(output_path_avatars)
         print(f"测试图片已保存到: {output_path_avatars}")
         
         print("\n✅ 测试完成!")

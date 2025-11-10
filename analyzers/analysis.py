@@ -6,17 +6,18 @@ import base64
 from io import BytesIO
 
 from .base_analyzer import BaseAnalyzer, get_all_analyzers
-from .render import RenderUserInfo, render_analysis_result
+from .render import RenderUserInfo, render_analysis_result, RenderInfo
 
 LOG = get_log("ChatAnalyzerEngine")
 
 class ChatAnalysisEngine:
     """聊天分析引擎 - 协调多个分析器,一次遍历完成所有统计"""
     
-    def __init__(self, resources_path: Path, group_id: str):
+    def __init__(self, resources_path: Path, group_id: str, render_info: RenderInfo):
         """初始化分析引擎"""
         self._resources_path = resources_path
         self.analyzers = [cls(group_id) for cls in get_all_analyzers()]
+        self._render_info = render_info
     
     def register_analyzer(self, analyzer: BaseAnalyzer):
         """
@@ -53,8 +54,8 @@ class ChatAnalysisEngine:
                 results[analyzer.name] = analyzer.custom_image_getter(self._resources_path)  # type: ignore
             else:
                 results[analyzer.name] = await analyzer.get_result()
-        
-        images = await render_analysis_result(results, resources_path=self._resources_path)
+
+        images = await render_analysis_result(self._render_info, results, resources_path=self._resources_path)
 
         if not images:
             LOG.warning("分析结果图片生成失败，重试中...")
