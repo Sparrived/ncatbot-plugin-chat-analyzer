@@ -1,0 +1,4 @@
+pillowmd
+aiohttp
+wordcloud
+jieba
