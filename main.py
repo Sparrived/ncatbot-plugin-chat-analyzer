@@ -10,7 +10,7 @@ from datetime import datetime
 
 class ChatAnalyzer(NcatBotPlugin):
     name = "ChatAnalyzer"
-    version = "1.0.1"
+    version = "1.0.2"
     description = "一个在某一时段内分析群聊活跃度的插件。"
     log = get_log(name)
 
