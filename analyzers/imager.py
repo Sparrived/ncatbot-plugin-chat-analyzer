@@ -1,6 +1,4 @@
 from ncatbot.core import GroupMessageEvent
-from typing import List
-from collections import Counter
 import re
 from .base_analyzer import BaseAnalyzer, register_analyzer
 
@@ -13,6 +11,7 @@ class ImageAnalyzer(BaseAnalyzer):
         super().__init__(group_id) 
         self._name = "图片分享达人"
         self._unit = "张"
+        self._custom_name_decorator = r"</\>"
     
     def process_event(self, event: GroupMessageEvent):
         """处理单个消息事件,统计图片"""
@@ -31,6 +30,7 @@ class EmoticonAnalyzer(BaseAnalyzer):
         super().__init__(group_id) 
         self._name = "表情包大王"
         self._unit = "张"
+        self._custom_name_decorator = r"</\>"
     
     def process_event(self, event: GroupMessageEvent):
         """处理单个消息事件,统计表情包"""

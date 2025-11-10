@@ -1,4 +1,4 @@
-from ncatbot.plugin_system import NcatBotPlugin, admin_group_filter, command_registry, option, param
+from ncatbot.plugin_system import NcatBotPlugin, admin_group_filter, command_registry, option, param, root_filter
 from ncatbot.utils import get_log
 from ncatbot.core import GroupMessageEvent
 from ncatbot.plugin_system.builtin_plugin.unified_registry.command_system.registry.help_system import HelpGenerator
@@ -10,7 +10,7 @@ from datetime import datetime
 
 class ChatAnalyzer(NcatBotPlugin):
     name = "ChatAnalyzer"
-    version = "1.0.2"
+    version = "1.0.3"
     description = "一个在某一时段内分析群聊活跃度的插件。"
     log = get_log(name)
 
@@ -26,6 +26,12 @@ class ChatAnalyzer(NcatBotPlugin):
             "analysis_duration",
             60 * 24,
             "分析时长（分钟）",
+            int
+        )
+        self.register_config(
+            "minimum_message_count",
+            10,
+            "分析要求的最小消息数",
             int
         )
         self.register_config(
@@ -47,6 +53,7 @@ class ChatAnalyzer(NcatBotPlugin):
     @ca_group.command("analyze", description="分析群聊数据并生成图片报告")
     @param("time", default="", help="分析时间点(格式: HH:MM)", required=False)
     @param("duration", default=1440, help="分析时长(分钟)", required=False)
+    @require_subscription
     async def cmd_analyze(self, event: GroupMessageEvent, time: str="", duration: int=1440):
         """分析群聊数据并生成图片报告"""
         if not time:
@@ -59,35 +66,15 @@ class ChatAnalyzer(NcatBotPlugin):
             return
         try:
             await event.reply("开始分析群聊数据喵~请稍等...")
-            
-            # 获取聊天记录
-            chat_histories = await self._get_chat_history(str(event.group_id), time, duration)
-            
-            if not chat_histories:
-                await event.reply("未能获取到聊天记录喵~")
-                return
-            
-            self.log.info(f"获取到 {len(chat_histories)} 条聊天记录")
-            group_info = await self.api.get_group_info(event.group_id)
-            # 使用分析引擎进行分析
-            render_info = RenderInfo(
-                current_time=datetime.now(),
-                analysis_duration=duration,
-                group_name_and_id=f"{group_info.group_name}({event.group_id})",
-                plugin_version=self.version
-            )
-            engine = ChatAnalysisEngine(self.workspace / "resources", event.group_id, render_info)
-            img_b64 = await engine.analyze(chat_histories)
-            # 发送图片
-            await self.api.post_group_msg(event.group_id, image=f"base64://{img_b64}")
-            
+            await self._post_analyze_img(event.group_id, time, duration)
         except Exception as e:
             self.log.error(f"分析失败: {e}", exc_info=True)
             await event.reply(f"分析失败喵~错误信息: {str(e)}")
     
-    @admin_group_filter
+    @root_filter
     @ca_group.command("test", description="测试指令")
     async def cmd_test(self, event: GroupMessageEvent):
+        """这条指令用于测试获取聊天记录功能，仅root用户可用"""
         await event.reply("测试指令响应成功喵~")
         chat_histories = await self._get_chat_history(str(event.group_id), "22:00", self.config["analysis_duration"])
         earliest_chat = chat_histories[0]
@@ -95,6 +82,28 @@ class ChatAnalyzer(NcatBotPlugin):
             await self.api.post_group_msg(event.group_id, f"获取到了{len(chat_histories)}条聊天记录喵~最早一条聊天记录是: {earliest_chat.raw_message}，时间是{datetime.fromtimestamp(earliest_chat.time).strftime('%Y-%m-%d %H:%M:%S')}")
 
     # ======== 私有方法 ========
+    async def _post_analyze_img(self, group_id: str, time: str, duration:int):
+        # 获取聊天记录
+        chat_histories = await self._get_chat_history(group_id, time, duration)
+        if not chat_histories:
+            raise ValueError("未能获取到聊天记录喵~")
+        if len(chat_histories) < self.config["minimum_message_count"]:
+            raise ValueError("聊天记录数量不足，无法进行分析喵~")
+        
+        self.log.info(f"获取到 {len(chat_histories)} 条聊天记录")
+        group_info = await self.api.get_group_info(group_id)
+        # 使用分析引擎进行分析
+        render_info = RenderInfo(
+            current_time=datetime.now(),
+            analysis_duration=duration,
+            group_name_and_id=f"{group_info.group_name}({group_id})",
+            plugin_version=self.version
+        )
+        engine = ChatAnalysisEngine(self.workspace / "resources", group_id, render_info)
+        img_b64 = await engine.analyze(chat_histories)
+        # 发送图片
+        await self.api.post_group_msg(group_id, image=f"base64://{img_b64}")
+
     async def _get_chat_history(self, group_id: str, time: str, duration:int, count: int = 101):
         """
         获取指定时间范围内的聊天记录

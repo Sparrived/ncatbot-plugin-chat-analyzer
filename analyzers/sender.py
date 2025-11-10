@@ -10,6 +10,7 @@ class ActiveSenderAnalyzer(BaseAnalyzer):
         super().__init__(group_id) 
         self._name = "话痨之王"
         self._unit = "条"
+        self._custom_name_decorator = r"</\>"
     
     def process_event(self, event: GroupMessageEvent):
         """处理单个消息事件,统计发言"""
@@ -24,6 +25,7 @@ class WordCountAnalyzer(BaseAnalyzer):
         super().__init__(group_id)
         self._name = "长文写手"
         self._unit = "字"
+        self._custom_name_decorator = r"</\>"
     
     def process_event(self, event: GroupMessageEvent):
         """处理单个消息事件,记录单条消息最长字数"""

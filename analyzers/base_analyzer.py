@@ -48,6 +48,7 @@ class BaseAnalyzer(ABC):
     _name : str
     _counter : Counter
     _unit: str = "个"
+    _custom_name_decorator: Optional[str] = None
     _custom_image_getter: Optional[Callable[[Path], Path] | Callable[[],str]] = None
 
     def __init__(self, group_id: str):
@@ -92,7 +93,10 @@ class BaseAnalyzer(ABC):
     @property
     def name(self) -> str:
         """获取分析器名称"""
-        return self._name
+        if self._custom_name_decorator:
+            return self._custom_name_decorator + self._name + self._custom_name_decorator
+        else:
+            return self._name
 
     @property
     def is_custom(self) -> bool:
