@@ -5,7 +5,7 @@ from typing import Tuple, Dict, Optional
 import base64
 from io import BytesIO
 from dataclasses import dataclass, field
-from ncatbot.utils import status
+from ncatbot.utils import status, get_log
 import sys
 
 # 导入 get_qq_avatar_async 函数
@@ -15,6 +15,9 @@ except ImportError:
     # 直接运行此文件时,添加父目录到路径
     sys.path.insert(0, str(Path(__file__).parent.parent.parent))
     from utils import get_qq_avatar_async
+
+LOG = get_log("ChatAnalyzer")
+
 
 @dataclass
 class RenderUserInfo:
@@ -67,7 +70,12 @@ class RenderUserInfo:
     async def _async_init(self):
         """异步初始化方法,获取昵称和头像"""
         if not self.debug:
-            member_info = await status.global_api.get_group_member_info(self.group_id, self.user_id)
+            try:
+                member_info = await status.global_api.get_group_member_info(self.group_id, self.user_id)
+            except Exception as e:
+                LOG.warning(f"无法获取用户信息，使用占位符: group_id={self.group_id}, user_id={self.user_id}, error={e}")
+                self = self.__dict__.update(self.create_placeholder(self.rank).__dict__)
+                return
             if not member_info:
                 raise ValueError(f"无法获取用户信息: group_id={self.group_id}, user_id={self.user_id}")
             self.nickname = member_info.card if member_info.card else member_info.nickname
