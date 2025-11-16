@@ -34,9 +34,12 @@ class EmoticonAnalyzer(BaseAnalyzer):
     
     def process_event(self, event: GroupMessageEvent):
         """处理单个消息事件,统计表情包"""
-        # 查找包含 summary=["动画表情"] 的图片 CQ 码
-        emoticon_pattern = r'\[CQ:image[^\]]*summary=&#91;动画表情&#93;[^\]]*\]'
-        emoticon_count = len(re.findall(emoticon_pattern, event.raw_message))
-        
+        imgs_msg_array = event.message.filter_image()
+        emoticon_count = 0
+        if (not imgs_msg_array) or len(imgs_msg_array) == 0:
+            return
+        for img in imgs_msg_array:
+            if img.is_animated_image():
+                emoticon_count += 1
         if emoticon_count > 0:
             self._counter[str(event.user_id)] += emoticon_count

@@ -12,7 +12,7 @@ import asyncio
 
 class ChatAnalyzer(NcatBotPlugin):
     name = "ChatAnalyzer"
-    version = "1.0.5"
+    version = "1.0.6"
     author = "Sparrived"
     description = "一个在某一时段内分析群聊活跃度的插件。"
     log = get_log(name)
