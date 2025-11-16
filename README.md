@@ -6,7 +6,7 @@
 
 [![License](https://img.shields.io/badge/License-MIT_License-green.svg)](https://github.com/Sparrived/ncatbot-plugin-chat-analyzer/blob/master/LICENSE)
 [![ncatbot version](https://img.shields.io/badge/ncatbot->=4.3.0-blue.svg)](https://github.com/liyihao1110/ncatbot)
-[![Version](https://img.shields.io/badge/version-1.0.5-orange.svg)](https://github.com/Sparrived/ncatbot-plugin-chat-analyzer/releases)
+[![Version](https://img.shields.io/badge/version-1.0.6-orange.svg)](https://github.com/Sparrived/ncatbot-plugin-chat-analyzer/releases)
 
 
 </div>
