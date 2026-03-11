@@ -5,3 +5,5 @@ build/
 dist/
 wheels/
 *.egg-info
+
+resources/
